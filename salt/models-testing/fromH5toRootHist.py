@@ -12,8 +12,12 @@ if __name__ == '__main__':
 
     #eospath = 'HSGN2_v7_allObj_objCounting_lessParameters' #sys.argv[1]
     #inpath = '/data/gfrattar/hs-ml/training-outputs/Evaluated-HSGN2_v7_allObj_objCounting_lessParameters_20240613-T151944/' #sys.argv[2]
-    eospath = 'HSGN2_v8_allObj_baseline'
-    inpath = '/data/gfrattar/hs-ml/training-outputs/Evaluated-HSGN2_v8_allObj_baseline_20240617-T153533/'
+    eospath = 'HSGN2_v10_allObj_baseline'
+    inpath = '/data/gfrattar/hs-ml/training-outputs/Evaluated-HSGN2_v10_allObj_baseline_20240625-T075607/'
+    #inpath = '/data/gfrattar/hs-ml/training-outputs/Evaluated-HSGN2_v9_allObj_baseline_20240619-T115730/'
+    #inpath = '/home/gfrattar/hs-ml/training/salt/salt/logs/ToTest-HSGN/'
+    #eospath = 'HSGN2_v8_allObj_baseline'
+    #inpath = '/data/gfrattar/hs-ml/training-outputs/Evaluated-HSGN2_v8_allObj_baseline_20240617-T153533/'
     #inpath = '/home/gfrattar/hs-ml/training/salt/salt/logs/HSGN2_v7_allObj_baseline_20240613-T150731/ckpts/'
     modelName = eospath
 
@@ -42,13 +46,18 @@ if __name__ == '__main__':
         os.system('mkdir {}'.format(efficiencyFilesPath))
         
     file_paths_labels = []
+    print(inpath)
+    print("Trying to glob {}".format(inpath+"*__test_*.h5"))
     listOfFiles = glob.glob(inpath+"*__test_*.h5")
+    print(listOfFiles)
 
     for file_path in listOfFiles:
         process = (file_path.split("_test_")[-1]).replace('.h5','')
+        #print(file_path)
+        #process = (file_path.split(".")[-3]).replace('.h5','')
         file_paths_labels.append((file_path,process))
 
-    print("Found = {}".format(file_paths_labels))
+    # print("Found = {}".format(file_paths_labels))
 
     sig_eff_map = dict()
     rej_map = dict()
@@ -57,7 +66,8 @@ if __name__ == '__main__':
 
     for file_path, label in file_paths_labels:
         if 'NNtestFile_0' not in file_path: continue
-        if 'NNtestFile_0_Sh_2214_Znunu_pTV2_CFilterBVeto' not in file_path: continue
+        #if 'user.gfrattar' not in file_path: continue
+    
 
         with h5py.File(file_path, 'r') as hdf_file:
             print("Executing {}".format(file_path))
@@ -105,6 +115,11 @@ if __name__ == '__main__':
             weighted_histoPass = dict()
             weighted_histoTotal = dict()
             
+            inclusivePass = dict()
+            inclusiveTotal = dict()
+            weighted_inclusivePass = dict()
+            weighted_inclusiveTotal = dict()
+            
             variables = ["mu","npv"]
             
             for var in variables:
@@ -115,7 +130,9 @@ if __name__ == '__main__':
             
             algos = ["SumPt2","HyyNN","GNN","BDT"]
             
-            process = label.split('File_0_')[1]
+            #process = label.split('File_0_')[1]
+            print(label)
+            process = label #.split('File_0_')[1]
             
             for var in variables:
                 for algo in algos:
@@ -123,6 +140,13 @@ if __name__ == '__main__':
                     histoTotal[var][algo] = ROOT.TH1F("total_"+algo+"_"+process+"_"+var,"",100,0,100)
                     weighted_histoPass[var][algo] = ROOT.TH1F("weighted_pass_"+algo+"_"+process+"_"+var,"",100,0,100)
                     weighted_histoTotal[var][algo] = ROOT.TH1F("weighted_total_"+algo+"_"+process+"_"+var,"",100,0,100)
+
+            for algo in algos:
+                inclusivePass[algo] = ROOT.TH1F("inclusive_pass_"+algo+"_"+process,"",1,0,1)
+                inclusiveTotal[algo] = ROOT.TH1F("inclusive_total_"+algo+"_"+process,"",1,0,1)
+                weighted_inclusivePass[algo] = ROOT.TH1F("weighted_inclusive_pass_"+algo+"_"+process,"",1,0,1)
+                weighted_inclusiveTotal[algo] = ROOT.TH1F("weighted_inclusive_total_"+algo+"_"+process,"",1,0,1)
+
 
             #unique_mu_values = df['actualIntPerXing'].astype(int).unique()
             for eN in events:
@@ -147,17 +171,29 @@ if __name__ == '__main__':
                 sumPt2_Max = df_toInvestigate['sumPt2'].max()
 
                 for algo in algos:
-                    histoTotal[var][algo].Fill(xval[var])
-                    weighted_histoTotal[var][algo].Fill(xval[var],weight)
-                                        
+                    for var in variables:
+                        histoTotal[var][algo].Fill(xval[var])
+                        weighted_histoTotal[var][algo].Fill(xval[var],weight)
+                    inclusiveTotal[algo].Fill(0.5)
+                    weighted_inclusiveTotal[algo].Fill(0.5,weight)
+                                    
                     if df_toInvestigate[varToTake[algo]].idxmax() == df_toInvestigate['isHardScatter'].idxmax():
-                        histoPass[var][algo].Fill(xval[var])
-                        weighted_histoPass[var][algo].Fill(xval[var],weight)
-    
-            ofile = ROOT.TFile('{}/eff_vs_{}_{}.root'.format(efficiencyFilesPath,var,label),'RECREATE')
-            for k in histoPass[var].keys():
-                histoPass[var][k].Write()
-                histoTotal[var][k].Write()
-                weighted_histoPass[var][k].Write()
-                weighted_histoTotal[var][k].Write()
+                        inclusivePass[algo].Fill(0.5)
+                        weighted_inclusivePass[algo].Fill(0.5,weight)
+                        for var in variables:
+                            histoPass[var][algo].Fill(xval[var])
+                            weighted_histoPass[var][algo].Fill(xval[var],weight)
+
+            ofile = ROOT.TFile('{}/efficiency_{}.root'.format(efficiencyFilesPath,label),'RECREATE')
+            for var in variables:
+                for k in histoPass[var].keys():
+                    histoPass[var][k].Write()
+                    histoTotal[var][k].Write()
+                    weighted_histoPass[var][k].Write()
+                    weighted_histoTotal[var][k].Write()
+                    if var == "npv":
+                        inclusivePass[k].Write()
+                        inclusiveTotal[k].Write()
+                        weighted_inclusivePass[k].Write()
+                        weighted_inclusiveTotal[k].Write()
             ofile.Close()
